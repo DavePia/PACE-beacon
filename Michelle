@@ -1,1 +1,372 @@
 
+<!-- Beacon: drop-in single file. Place just above </body> -->
+<script>
+/*
+  Drop-in Beacon (single-file)
+  - Paste into your page near </body>
+  - Configure BEACON_CONFIG below
+  - Respects Do Not Track and a CMP if present (window.__CMP__ hook)
+  - Batches events and uses navigator.sendBeacon when possible
+  - No raw PII collected. Session id is random and stored locally.
+*/
+
+(function () {
+  // ---------- CONFIG ----------
+  const BEACON_CONFIG = {
+    // REQUIRED: set to your collector endpoint URL (https)
+    endpoint: 'https://collector.example.com/beacon', 
+
+    // Sampling: fraction of sessions to keep (0.0 - 1.0)
+    sampleRate: 1.0, 
+
+    // Max events queued client-side before dropping oldest
+    maxQueueSize: 200,
+
+    // Batch send every N ms (or on unload)
+    flushIntervalMs: 5000,
+
+    // Max events per minute per session (rate limit client-side)
+    maxEventsPerMinute: 600,
+
+    // Send minimal UA (trimmed)
+    trimUserAgent: true,
+
+    // Default page category detection: override page data-category on <html> or window.__PAGE_CATEGORY__
+    pageCategorySources: [
+      () => window.__PAGE_CATEGORY__,
+      () => document.documentElement.getAttribute('data-category'),
+      () => document.querySelector('meta[name="page:category"]')?.getAttribute('content'),
+      () => null
+    ],
+
+    // Whether to respect navigator.doNotTrack
+    respectDoNotTrack: true,
+
+    // Optional CMP hook name: function returning boolean consent (true/false) or undefined if unknown
+    cmpHook: function () {
+      try {
+        if (typeof window.__CMP__ === 'function') return window.__CMP__('getConsent') === true;
+      } catch (e) {}
+      // example for other CMPs:
+      try {
+        if (typeof window.__tcfapi === 'function') return undefined; // leave CMP-specific decisions to integrator
+      } catch (e) {}
+      return undefined;
+    },
+
+    // Throttle scroll updates to at most one event per n ms
+    scrollThrottleMs: 1500
+  };
+
+  // ---------- UTILITIES ----------
+  function nowMs() { return Date.now(); }
+  function safeJSONParse(s, fallback = null) {
+    try { return JSON.parse(s); } catch (e) { return fallback; }
+  }
+  function uuidv4() {
+    // It's fine for session id; not cryptographically necessary
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
+  }
+  async function sha256hex(str) {
+    try {
+      const enc = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest('SHA-256', enc);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+    } catch (e) {
+      // fallback: base64 of random
+      return btoa(Math.random().toString()).slice(0, 64);
+    }
+  }
+  function trimUA(ua) {
+    if (!ua) return '';
+    // Keep first chunk (browser/version) and platform token
+    const parts = ua.split(' ');
+    return parts.slice(0, 2).join(' ').slice(0, 128);
+  }
+
+  // ---------- CONSENT CHECK ----------
+  function isDoNotTrack() {
+    if (!BEACON_CONFIG.respectDoNotTrack) return false;
+    const dnt = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+    return dnt === '1' || dnt === 'yes';
+  }
+  function hasConsent() {
+    // CMP hook: if returns true/false, respect it; if undefined, fall back to DoNotTrack semantics
+    try {
+      const cmp = BEACON_CONFIG.cmpHook && BEACON_CONFIG.cmpHook();
+      if (cmp === true) return true;
+      if (cmp === false) return false;
+    } catch (e) {}
+    if (isDoNotTrack()) return false;
+    // Default allow unless integrator config says otherwise
+    return true;
+  }
+
+  // ---------- SESSION / PERSISTENCE ----------
+  const STORAGE_KEY = 'beacon_session_v1';
+  async function getSession() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = safeJSONParse(raw, null);
+      if (parsed && parsed.id && parsed.createdAt) return parsed;
+    }
+    const id = uuidv4();
+    const createdAt = nowMs();
+    const sess = { id, createdAt };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sess)); } catch (e) {}
+    return sess;
+  }
+
+  // ---------- IN-MEMORY QUEUE & RATE-LIMITING ----------
+  const eventQueue = [];
+  let eventsThisMinute = 0;
+  let minuteWindowStart = Math.floor(nowMs() / 60000) * 60000;
+
+  function checkRateLimit() {
+    const now = nowMs();
+    const minuteStart = Math.floor(now / 60000) * 60000;
+    if (minuteStart !== minuteWindowStart) {
+      minuteWindowStart = minuteStart;
+      eventsThisMinute = 0;
+    }
+    return eventsThisMinute < (BEACON_CONFIG.maxEventsPerMinute || 600);
+  }
+  function incrementRateCount(n=1){ eventsThisMinute += n; }
+
+  function enqueueEvent(ev) {
+    if (eventQueue.length >= BEACON_CONFIG.maxQueueSize) {
+      // drop oldest
+      eventQueue.shift();
+    }
+    eventQueue.push(ev);
+  }
+
+  // ---------- EVENT SCHEMA ----------
+  // Minimal, privacy-safe schema
+  // {event_version, event_type, timestamp, session_hash, page:{category,path}, engagement:{..}, meta:{ua,viewport,referrer}}
+  async function buildEvent(eventType, extra) {
+    if (Math.random() > (BEACON_CONFIG.sampleRate || 1.0)) return null;
+    if (!hasConsent()) return null;
+    if (!checkRateLimit()) return null;
+
+    const sess = await getSession();
+    // Client-side obfuscation: hash of session.id (server may also re-hash with secret salt)
+    const session_hash = await sha256hex(sess.id).catch(() => sess.id);
+
+    const pageCategory = BEACON_CONFIG.pageCategorySources.map(fn => {
+      try { return fn(); } catch (e) { return null; }
+    }).find(Boolean) || 'unknown';
+
+    const ev = {
+      event_version: '1.0',
+      event_type: eventType,
+      timestamp: nowMs(),
+      session_hash,
+      page: {
+        category: pageCategory,
+        path: location.pathname || location.href
+      },
+      engagement: extra || {},
+      meta: {
+        ua: BEACON_CONFIG.trimUserAgent ? trimUA(navigator.userAgent) : navigator.userAgent,
+        viewport: `${innerWidth}x${innerHeight}`,
+        referrer_domain: (document.referrer ? (new URL(document.referrer)).hostname : null)
+      }
+    };
+    return ev;
+  }
+
+  // ---------- SENDER (sendBeacon + fallback) ----------
+  function sendPayload(payload) {
+    if (!payload || !payload.length) return;
+    const body = JSON.stringify({ events: payload, client_ts: nowMs() });
+    try {
+      // Use sendBeacon for unload-safe send
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' });
+        const ok = navigator.sendBeacon(BEACON_CONFIG.endpoint, blob);
+        if (ok) return Promise.resolve(true);
+      }
+    } catch (e) {
+      // fall through to fetch
+    }
+    // fallback: keepalive fetch (fire-and-forget)
+    try {
+      return fetch(BEACON_CONFIG.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+        credentials: 'omit',
+      }).then(() => true).catch(()=>false);
+    } catch (e) {
+      return Promise.resolve(false);
+    }
+  }
+
+  // ---------- FLUSHING / BACKOFF ----------
+  let flushTimer = null;
+  let backoffMs = 0;
+  async function flushQueue() {
+    if (!eventQueue.length) return;
+    // If scrapped by rate-limiter, still attempt sending queued events
+    const toSend = eventQueue.splice(0, eventQueue.length);
+    incrementRateCount(toSend.length);
+    const success = await sendPayload(toSend);
+    if (!success) {
+      // put back events but avoid unbounded growth
+      eventQueue.unshift(...toSend.slice(0, Math.max(0, BEACON_CONFIG.maxQueueSize - eventQueue.length)));
+      // simple backoff
+      backoffMs = Math.min((backoffMs || 1000) * 2 || 1000, 60 * 1000);
+      scheduleFlush(backoffMs);
+    } else {
+      backoffMs = 0;
+      scheduleFlush(BEACON_CONFIG.flushIntervalMs);
+    }
+  }
+  function scheduleFlush(delay) {
+    if (flushTimer) clearTimeout(flushTimer);
+    flushTimer = setTimeout(flushQueue, delay || (BEACON_CONFIG.flushIntervalMs || 5000));
+  }
+
+  // Ensure final flush on unload
+  function handleVisibilityChange() {
+    if (document.visibilityState === 'hidden') {
+      // Attempt final send
+      if (eventQueue.length) {
+        // sendBeacon is best-effort; if not available, fetch keepalive might be used if supported
+        sendPayload(eventQueue.splice(0, eventQueue.length));
+      }
+    }
+  }
+  window.addEventListener('visibilitychange', handleVisibilityChange, true);
+  window.addEventListener('pagehide', handleVisibilityChange, true);
+  window.addEventListener('beforeunload', handleVisibilityChange, true);
+
+  // ---------- AUTO CAPTURE: page_view, clicks, scroll, video ----------
+  // Page view on load (but after DOM ready)
+  function capturePageView() {
+    buildEvent('page_view', { time_on_page_ms: 0 }).then(ev=>{
+      if (!ev) return;
+      enqueueEvent(ev);
+      scheduleFlush(0);
+    });
+  }
+
+  // Clicks: any element with data-beacon="click" will be tracked
+  function onDocumentClick(e) {
+    try {
+      let el = e.target;
+      // find nearest element with data-beacon attribute
+      while (el && el !== document.body) {
+        if (el.hasAttribute && el.hasAttribute('data-beacon')) break;
+        el = el.parentNode;
+      }
+      if (!el || !el.getAttribute) return;
+      if (el.getAttribute('data-beacon') !== 'click') return;
+      const label = el.getAttribute('data-beacon-label') || el.getAttribute('aria-label') || el.innerText?.slice(0,80) || null;
+      buildEvent('click', { label }).then(ev=>{
+        if (!ev) return;
+        enqueueEvent(ev);
+      });
+    } catch (err) { /* ignore errors */ }
+  }
+  document.addEventListener('click', onDocumentClick, true);
+
+  // Scroll: send progress updates (throttled)
+  let lastScrollPct = 0;
+  let lastScrollTime = 0;
+  function onScrollThrottled() {
+    const now = nowMs();
+    if (now - lastScrollTime < BEACON_CONFIG.scrollThrottleMs) return;
+    lastScrollTime = now;
+    const pct = Math.min(100, Math.floor(((window.scrollY + window.innerHeight) / (document.documentElement.scrollHeight || document.body.scrollHeight || 1)) * 100));
+    if (Math.abs(pct - lastScrollPct) < 10) return; // only send meaningful changes
+    lastScrollPct = pct;
+    buildEvent('scroll', { scroll_pct: pct }).then(ev=>{
+      if (!ev) return;
+      enqueueEvent(ev);
+    });
+  }
+  window.addEventListener('scroll', onScrollThrottled, { passive: true });
+
+  // HTML5 video auto-capture: add data-beacon-video attribute to <video> to enable
+  function bindVideoEvents() {
+    const videos = document.querySelectorAll('video[data-beacon-video]');
+    videos.forEach(v => {
+      // send play / pause / progress events
+      v.addEventListener('play', ()=> buildEvent('video_play', { src: v.currentSrc || v.getAttribute('src') || null }).then(ev => ev && enqueueEvent(ev)));
+      v.addEventListener('pause', ()=> buildEvent('video_pause', { current_sec: Math.floor(v.currentTime) }).then(ev => ev && enqueueEvent(ev)));
+      // throttle timeupdate for progress every ~3s
+      let lastTimeUpdate = 0;
+      v.addEventListener('timeupdate', ()=>{
+        const now = nowMs();
+        if (now - lastTimeUpdate < 2500) return;
+        lastTimeUpdate = now;
+        buildEvent('video_progress', { current_sec: Math.floor(v.currentTime), duration_sec: Math.floor(v.duration || 0) }).then(ev => ev && enqueueEvent(ev));
+      });
+    });
+  }
+
+  // ---------- PUBLIC API ----------
+  const BeaconAPI = {
+    send: async function (eventType, extra) {
+      const ev = await buildEvent(eventType, extra);
+      if (!ev) return false;
+      enqueueEvent(ev);
+      scheduleFlush(0);
+      return true;
+    },
+    // returns a promise resolving to the count in queue
+    queueSize: function () { return eventQueue.length; },
+    // manual flush
+    flush: flushQueue,
+    // helper to bind video elements if added dynamically
+    bindVideos: bindVideoEvents
+  };
+
+  // Attach to window for integrator control
+  window._simpleBeacon = BeaconAPI;
+
+  // ---------- INIT ----------
+  (function init() {
+    // guard: endpoint must be set
+    if (!BEACON_CONFIG.endpoint) {
+      console.warn('Beacon: no endpoint configured; beacon disabled.');
+      return;
+    }
+    // if user denies consent, do nothing
+    if (!hasConsent()) {
+      // still expose API so integrator can check or override
+      console.info('Beacon: consent not granted or DNT enabled — events disabled client-side.');
+      return;
+    }
+
+    // Capture initial page_view (on load or DOMContentLoaded)
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      capturePageView();
+      bindVideoEvents();
+    } else {
+      document.addEventListener('DOMContentLoaded', function () {
+        capturePageView();
+        bindVideoEvents();
+      }, { once: true });
+    }
+
+    // schedule periodic flush
+    scheduleFlush(BEACON_CONFIG.flushIntervalMs);
+
+    // monitor queue and ensure it doesn't grow uncontrolled
+    setInterval(()=> {
+      // simple housekeeping: if queue > max, trim
+      if (eventQueue.length > BEACON_CONFIG.maxQueueSize) eventQueue.splice(0, eventQueue.length - BEACON_CONFIG.maxQueueSize);
+    }, 60000);
+  })();
+
+  // ---------- Lightweight example of how integrator can use the API ----------
+  // window._simpleBeacon.send('add_to_cart', { product_hash: 'sha256:...' });
+
+})();
+</script>
