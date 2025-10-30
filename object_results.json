@@ -1,0 +1,347 @@
+{
+  "video_file": "videos/sample.mp4",
+  "objects": [
+    {
+      "description": "person",
+      "confidence": 99.53,
+      "start": 0.04,
+      "end": 3.16
+    },
+    {
+      "description": "shorts",
+      "confidence": 81.48,
+      "start": 0.04,
+      "end": 2.92
+    },
+    {
+      "description": "bag",
+      "confidence": 64.02,
+      "start": 0.04,
+      "end": 1.8399999999999999
+    },
+    {
+      "description": "top",
+      "confidence": 59.63,
+      "start": 0.04,
+      "end": 1.3599999999999999
+    },
+    {
+      "description": "dress",
+      "confidence": 68.45,
+      "start": 0.04,
+      "end": 0.88
+    },
+    {
+      "description": "surfboard",
+      "confidence": 53.7,
+      "start": 0.28,
+      "end": 0.28
+    },
+    {
+      "description": "wardrobe",
+      "confidence": 56.94,
+      "start": 4.12,
+      "end": 4.12
+    },
+    {
+      "description": "cabinetry",
+      "confidence": 53.41,
+      "start": 5.32,
+      "end": 6.16
+    },
+    {
+      "description": "door",
+      "confidence": 63.85,
+      "start": 5.68,
+      "end": 6.04
+    },
+    {
+      "description": "cabinetry",
+      "confidence": 65.36,
+      "start": 6.28,
+      "end": 6.28
+    },
+    {
+      "description": "hat",
+      "confidence": 91.41,
+      "start": 6.4,
+      "end": 7.72
+    },
+    {
+      "description": "person",
+      "confidence": 96.0,
+      "start": 6.52,
+      "end": 7.72
+    },
+    {
+      "description": "top",
+      "confidence": 81.99,
+      "start": 6.64,
+      "end": 7.72
+    },
+    {
+      "description": "hat",
+      "confidence": 79.54,
+      "start": 7.84,
+      "end": 10.36
+    },
+    {
+      "description": "person",
+      "confidence": 98.78,
+      "start": 7.84,
+      "end": 10.6
+    },
+    {
+      "description": "top",
+      "confidence": 78.51,
+      "start": 7.84,
+      "end": 10.6
+    },
+    {
+      "description": "person",
+      "confidence": 98.97,
+      "start": 9.04,
+      "end": 10.6
+    },
+    {
+      "description": "hat",
+      "confidence": 56.95,
+      "start": 9.04,
+      "end": 9.04
+    },
+    {
+      "description": "top",
+      "confidence": 87.58,
+      "start": 9.16,
+      "end": 10.6
+    },
+    {
+      "description": "skirt",
+      "confidence": 71.67,
+      "start": 9.28,
+      "end": 10.6
+    },
+    {
+      "description": "bag",
+      "confidence": 66.66,
+      "start": 9.64,
+      "end": 10.36
+    },
+    {
+      "description": "packaged goods",
+      "confidence": 55.75,
+      "start": 9.88,
+      "end": 10.0
+    },
+    {
+      "description": "luggage & bags",
+      "confidence": 67.75,
+      "start": 10.12,
+      "end": 10.48
+    },
+    {
+      "description": "hat",
+      "confidence": 63.61,
+      "start": 10.24,
+      "end": 10.6
+    },
+    {
+      "description": "top",
+      "confidence": 85.02,
+      "start": 10.72,
+      "end": 12.16
+    },
+    {
+      "description": "hat",
+      "confidence": 90.98,
+      "start": 10.72,
+      "end": 12.16
+    },
+    {
+      "description": "person",
+      "confidence": 98.56,
+      "start": 10.72,
+      "end": 12.16
+    },
+    {
+      "description": "person",
+      "confidence": 83.06,
+      "start": 11.2,
+      "end": 11.8
+    },
+    {
+      "description": "clothing",
+      "confidence": 67.96,
+      "start": 11.32,
+      "end": 12.16
+    },
+    {
+      "description": "person",
+      "confidence": 87.03,
+      "start": 11.8,
+      "end": 12.16
+    },
+    {
+      "description": "person",
+      "confidence": 99.66,
+      "start": 12.28,
+      "end": 13.96
+    },
+    {
+      "description": "person",
+      "confidence": 99.28,
+      "start": 12.28,
+      "end": 13.96
+    },
+    {
+      "description": "hat",
+      "confidence": 92.37,
+      "start": 12.28,
+      "end": 13.96
+    },
+    {
+      "description": "top",
+      "confidence": 80.48,
+      "start": 12.28,
+      "end": 13.96
+    },
+    {
+      "description": "top",
+      "confidence": 69.86,
+      "start": 12.28,
+      "end": 13.96
+    },
+    {
+      "description": "pants",
+      "confidence": 67.05,
+      "start": 12.28,
+      "end": 12.28
+    },
+    {
+      "description": "pants",
+      "confidence": 66.15,
+      "start": 12.88,
+      "end": 13.96
+    },
+    {
+      "description": "luggage & bags",
+      "confidence": 62.63,
+      "start": 12.88,
+      "end": 13.48
+    },
+    {
+      "description": "pants",
+      "confidence": 50.85,
+      "start": 13.0,
+      "end": 13.6
+    },
+    {
+      "description": "handbag",
+      "confidence": 60.88,
+      "start": 13.36,
+      "end": 13.36
+    },
+    {
+      "description": "person",
+      "confidence": 99.74,
+      "start": 14.08,
+      "end": 15.64
+    },
+    {
+      "description": "person",
+      "confidence": 87.29,
+      "start": 14.08,
+      "end": 14.44
+    },
+    {
+      "description": "shirt",
+      "confidence": 76.85,
+      "start": 14.08,
+      "end": 15.64
+    },
+    {
+      "description": "glasses",
+      "confidence": 78.91,
+      "start": 14.08,
+      "end": 14.68
+    },
+    {
+      "description": "clothing",
+      "confidence": 60.51,
+      "start": 14.56,
+      "end": 14.68
+    },
+    {
+      "description": "packaged goods",
+      "confidence": 72.95,
+      "start": 15.04,
+      "end": 15.04
+    },
+    {
+      "description": "glasses",
+      "confidence": 63.84,
+      "start": 15.28,
+      "end": 15.52
+    },
+    {
+      "description": "person",
+      "confidence": 80.13,
+      "start": 15.64,
+      "end": 15.64
+    },
+    {
+      "description": "shoe",
+      "confidence": 57.7,
+      "start": 15.64,
+      "end": 15.64
+    },
+    {
+      "description": "top",
+      "confidence": 54.96,
+      "start": 15.64,
+      "end": 15.64
+    },
+    {
+      "description": "person",
+      "confidence": 98.25,
+      "start": 15.76,
+      "end": 19.96
+    },
+    {
+      "description": "person",
+      "confidence": 95.0,
+      "start": 15.76,
+      "end": 19.96
+    },
+    {
+      "description": "dress",
+      "confidence": 63.36,
+      "start": 15.76,
+      "end": 19.72
+    },
+    {
+      "description": "pants",
+      "confidence": 67.51,
+      "start": 15.76,
+      "end": 16.12
+    },
+    {
+      "description": "top",
+      "confidence": 58.37,
+      "start": 15.88,
+      "end": 18.64
+    },
+    {
+      "description": "person",
+      "confidence": 94.17,
+      "start": 17.56,
+      "end": 17.92
+    },
+    {
+      "description": "skirt",
+      "confidence": 62.12,
+      "start": 18.76,
+      "end": 19.84
+    }
+  ]
+}
